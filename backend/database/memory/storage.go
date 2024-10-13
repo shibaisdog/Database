@@ -2,19 +2,24 @@ package memory
 
 import (
 	"cloud-logic/database"
+	"encoding/base64"
 	"log"
-	"time"
+
+	"github.com/google/uuid"
 )
 
 type Collection map[string]interface{}
 
 type User struct {
-	ID         string     `json:"id"`
-	PW         string     `json:"pw"`
-	AllowIP    []string   `json:"allow-ip"`
-	AllowID    []string   `json:"allow-id"`
-	API_TOKEN  string     `json:"api-token"`
-	Collection Collection `json:"collect"`
+	ID          string     `json:"id"`
+	PW          string     `json:"pw"`
+	Email       string     `json:"email"`
+	AllowIP     []string   `json:"allow-ip"`
+	AllowID     []string   `json:"allow-id"`
+	API_TOKEN   string     `json:"api-token"`
+	Collection  Collection `json:"collect"`
+	Certi       bool
+	Certi_Token string
 }
 
 type Storage struct {
@@ -54,17 +59,25 @@ func NewStorage(path string) *Storage {
 	}
 }
 
-func (s *Storage) NewUser(id, pw string) *User {
-	if s.CheckUser(id) {
+func NewToken() string {
+	return base64.RawURLEncoding.EncodeToString([]byte(uuid.New().String()))
+}
+
+func (s *Storage) NewUser(token, email, id, pw string) *User {
+	password, err := Hash(pw)
+	if err != nil || s.CheckUser(id) {
 		return nil
 	}
 	user := &User{
-		ID:         id,
-		PW:         pw,
-		AllowIP:    make([]string, 0),
-		AllowID:    make([]string, 0),
-		API_TOKEN:  id + time.Now().GoString(),
-		Collection: make(Collection),
+		ID:          id,
+		PW:          password,
+		Email:       email,
+		AllowIP:     make([]string, 0),
+		AllowID:     make([]string, 0),
+		API_TOKEN:   NewToken(),
+		Collection:  make(Collection),
+		Certi:       false,
+		Certi_Token: token,
 	}
 	s.User[id] = user
 	data, err := database.ByteJSON(user)
@@ -100,6 +113,15 @@ func (s *Storage) GetUser(id string) *User {
 func (s *Storage) CheckAPIToken(token string) *User {
 	for _, v := range s.User {
 		if v.API_TOKEN == token {
+			return v
+		}
+	}
+	return nil
+}
+
+func (s *Storage) CheckEmail(email string) *User {
+	for _, v := range s.User {
+		if v.Email == email {
 			return v
 		}
 	}
